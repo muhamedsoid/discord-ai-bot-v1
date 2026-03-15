@@ -1,4 +1,4 @@
-import { Message, Guild, Interaction } from "discord.js";
+import { Message, Guild, Interaction, GuildMember, TextChannel, EmbedBuilder } from "discord.js";
 import { BotClient } from "./client";
 import { handleCommand, handleInteraction, registerSlashCommands } from "./commandHandler";
 import { getDb } from "../db";
@@ -39,6 +39,30 @@ export function setupEventHandlers(client: BotClient): void {
 
   client.on("guildDelete", async (guild: Guild) => {
     console.log(`😢 Bot left guild: ${guild.name} (${guild.id})`);
+  });
+
+  client.on("guildMemberAdd", async (member: GuildMember) => {
+    console.log(`🆕 New member joined: ${member.user.tag} in ${member.guild.name}`);
+    
+    // Find the first available text channel
+    const welcomeChannel = member.guild.channels.cache.find(
+      (ch) => ch.name.includes("welcome") || ch.name.includes("ترحيب") || (ch instanceof TextChannel && ch.permissionsFor(member.guild.members.me!).has("SendMessages"))
+    ) as TextChannel;
+
+    if (welcomeChannel) {
+      const embed = new EmbedBuilder()
+        .setColor("#2ecc71")
+        .setTitle("👋 عضو جديد!")
+        .setDescription(`أهلاً بك **${member.user.username}** في سيرفر **${member.guild.name}**!`)
+        .setThumbnail(member.user.displayAvatarURL())
+        .addFields(
+          { name: "العضو رقم", value: `${member.guild.memberCount}`, inline: true },
+          { name: "تاريخ الإنشاء", value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
+        )
+        .setTimestamp();
+
+      await welcomeChannel.send({ content: `مرحباً بك ${member}`, embeds: [embed] });
+    }
   });
 
   client.on("messageCreate", async (message: Message) => {

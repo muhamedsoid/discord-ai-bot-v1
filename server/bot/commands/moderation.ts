@@ -1,14 +1,15 @@
 import type { Command } from "../types";
-import { Message, EmbedBuilder, PermissionFlagsBits } from "discord.js";
+import { Message, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from "discord.js";
 import { getDb } from "../../db";
 import { moderationLogs } from "../../../drizzle/schema";
 
-const createModerationEmbed = (action: string, targetUser: string, reason: string) => {
+const createModerationEmbed = (action: string, targetUser: string, moderator: string, reason: string, color: any = "#ff0000") => {
   return new EmbedBuilder()
-    .setColor("#ff0000")
+    .setColor(color)
     .setTitle(`⚠️ ${action}`)
     .addFields(
-      { name: "المستخدم", value: targetUser },
+      { name: "المستخدم", value: targetUser, inline: true },
+      { name: "المشرف", value: moderator, inline: true },
       { name: "السبب", value: reason || "لم يتم تحديد سبب" }
     )
     .setTimestamp();
@@ -17,48 +18,58 @@ const createModerationEmbed = (action: string, targetUser: string, reason: strin
 export const kickCommand: Command = {
   name: "kick",
   description: "طرد عضو من السيرفر",
-  adminOnly: true,
-  async execute(message, args) {
-    if (!(message instanceof Message)) return;
+  slashBuilder: new SlashCommandBuilder()
+    .setName("kick")
+    .setDescription("طرد عضو من السيرفر")
+    .addUserOption(opt => opt.setName("user").setDescription("العضو المراد طرده").setRequired(true))
+    .addStringOption(opt => opt.setName("reason").setDescription("السبب")),
+  async execute(interaction, args) {
+    const isMsg = interaction instanceof Message;
+    const guild = interaction.guild;
+    const member = interaction.member as GuildMember;
+    const moderator = isMsg ? interaction.author : interaction.user;
 
-    if (!message.member?.permissions.has(PermissionFlagsBits.KickMembers)) {
-      await message.reply("❌ ليس لديك صلاحية لطرد الأعضاء");
+    if (!member.permissions.has(PermissionFlagsBits.KickMembers)) {
+      const msg = "❌ ليس لديك صلاحية طرد الأعضاء";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
       return;
     }
 
-    const targetUser = message.mentions.users.first();
+    const targetUser = isMsg ? interaction.mentions.users.first() : interaction.options.getUser("user");
+    const reason = isMsg ? args.slice(1).join(" ") : interaction.options.getString("reason") || "لم يتم تحديد سبب";
+
     if (!targetUser) {
-      await message.reply("❌ يجب أن تحدد عضو لطرده");
+      if (isMsg) await interaction.reply("❌ يجب أن تحدد عضو لطرده");
       return;
     }
-
-    const reason = args.slice(1).join(" ") || "لم يتم تحديد سبب";
 
     try {
-      const member = await message.guild?.members.fetch(targetUser.id);
-      if (!member) {
-        await message.reply("❌ لم أتمكن من العثور على العضو");
+      const targetMember = await guild?.members.fetch(targetUser.id);
+      if (!targetMember || !targetMember.kickable) {
+        const msg = "❌ لا يمكنني طرد هذا العضو (قد يكون لديه رتبة أعلى مني)";
+        isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
         return;
       }
 
-      await member.kick(reason);
+      await targetMember.kick(reason);
 
       const db = await getDb();
-      if (db) {
+      if (db && interaction.guildId) {
         await db.insert(moderationLogs).values({
-          serverId: message.guildId!,
+          serverId: interaction.guildId,
           targetUserId: targetUser.id,
-          moderatorId: message.author.id,
+          moderatorId: moderator.id,
           action: "kick",
           reason,
         });
       }
 
-      const embed = createModerationEmbed("طرد", targetUser.username, reason);
-      await message.reply({ embeds: [embed] });
+      const embed = createModerationEmbed("طرد", targetUser.tag, moderator.tag, reason);
+      isMsg ? await interaction.reply({ embeds: [embed] }) : await interaction.reply({ embeds: [embed] });
     } catch (error) {
       console.error("Kick error:", error);
-      await message.reply("❌ حدث خطأ أثناء محاولة طرد العضو");
+      const msg = "❌ حدث خطأ أثناء محاولة طرد العضو";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
     }
   },
 };
@@ -66,42 +77,102 @@ export const kickCommand: Command = {
 export const banCommand: Command = {
   name: "ban",
   description: "حظر عضو من السيرفر",
-  adminOnly: true,
-  async execute(message, args) {
-    if (!(message instanceof Message)) return;
+  slashBuilder: new SlashCommandBuilder()
+    .setName("ban")
+    .setDescription("حظر عضو من السيرفر")
+    .addUserOption(opt => opt.setName("user").setDescription("العضو المراد حظره").setRequired(true))
+    .addStringOption(opt => opt.setName("reason").setDescription("السبب")),
+  async execute(interaction, args) {
+    const isMsg = interaction instanceof Message;
+    const guild = interaction.guild;
+    const member = interaction.member as GuildMember;
+    const moderator = isMsg ? interaction.author : interaction.user;
 
-    if (!message.member?.permissions.has(PermissionFlagsBits.BanMembers)) {
-      await message.reply("❌ ليس لديك صلاحية لحظر الأعضاء");
+    if (!member.permissions.has(PermissionFlagsBits.BanMembers)) {
+      const msg = "❌ ليس لديك صلاحية حظر الأعضاء";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
       return;
     }
 
-    const targetUser = message.mentions.users.first();
+    const targetUser = isMsg ? interaction.mentions.users.first() : interaction.options.getUser("user");
+    const reason = isMsg ? args.slice(1).join(" ") : interaction.options.getString("reason") || "لم يتم تحديد سبب";
+
     if (!targetUser) {
-      await message.reply("❌ يجب أن تحدد عضو لحظره");
+      if (isMsg) await interaction.reply("❌ يجب أن تحدد عضو لحظره");
       return;
     }
-
-    const reason = args.slice(1).join(" ") || "لم يتم تحديد سبب";
 
     try {
-      await message.guild?.bans.create(targetUser.id, { reason });
+      const targetMember = await guild?.members.fetch(targetUser.id).catch(() => null);
+      if (targetMember && !targetMember.bannable) {
+        const msg = "❌ لا يمكنني حظر هذا العضو (قد يكون لديه رتبة أعلى مني)";
+        isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
+        return;
+      }
+
+      await guild?.bans.create(targetUser.id, { reason });
 
       const db = await getDb();
-      if (db) {
+      if (db && interaction.guildId) {
         await db.insert(moderationLogs).values({
-          serverId: message.guildId!,
+          serverId: interaction.guildId,
           targetUserId: targetUser.id,
-          moderatorId: message.author.id,
+          moderatorId: moderator.id,
           action: "ban",
           reason,
         });
       }
 
-      const embed = createModerationEmbed("حظر", targetUser.username, reason);
-      await message.reply({ embeds: [embed] });
+      const embed = createModerationEmbed("حظر", targetUser.tag, moderator.tag, reason);
+      isMsg ? await interaction.reply({ embeds: [embed] }) : await interaction.reply({ embeds: [embed] });
     } catch (error) {
       console.error("Ban error:", error);
-      await message.reply("❌ حدث خطأ أثناء محاولة حظر العضو");
+      const msg = "❌ حدث خطأ أثناء محاولة حظر العضو";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
+    }
+  },
+};
+
+export const clearCommand: Command = {
+  name: "clear",
+  description: "مسح عدد معين من الرسائل",
+  slashBuilder: new SlashCommandBuilder()
+    .setName("clear")
+    .setDescription("مسح عدد معين من الرسائل")
+    .addIntegerOption(opt => opt.setName("amount").setDescription("عدد الرسائل (1-100)").setRequired(true).setMinValue(1).setMaxValue(100)),
+  async execute(interaction, args) {
+    const isMsg = interaction instanceof Message;
+    const member = interaction.member as GuildMember;
+    const channel = interaction.channel;
+
+    if (!member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+      const msg = "❌ ليس لديك صلاحية إدارة الرسائل";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
+      return;
+    }
+
+    const amount = isMsg ? parseInt(args[0]) : interaction.options.getInteger("amount");
+    if (!amount || isNaN(amount) || amount < 1 || amount > 100) {
+      const msg = "❌ يرجى تحديد عدد بين 1 و 100";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
+      return;
+    }
+
+    try {
+      if (channel?.isTextBased() && "bulkDelete" in channel) {
+        await channel.bulkDelete(amount, true);
+        const successMsg = `✅ تم مسح ${amount} رسالة بنجاح`;
+        if (isMsg) {
+           const reply = await interaction.channel.send(successMsg);
+           setTimeout(() => reply.delete().catch(() => {}), 5000);
+        } else {
+           await interaction.reply({ content: successMsg, ephemeral: true });
+        }
+      }
+    } catch (error) {
+      console.error("Clear error:", error);
+      const msg = "❌ حدث خطأ أثناء محاولة مسح الرسائل (قد تكون الرسائل قديمة جداً)";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
     }
   },
 };
@@ -109,120 +180,141 @@ export const banCommand: Command = {
 export const warnCommand: Command = {
   name: "warn",
   description: "تحذير عضو",
-  adminOnly: true,
-  async execute(message, args) {
-    if (!(message instanceof Message)) return;
+  slashBuilder: new SlashCommandBuilder()
+    .setName("warn")
+    .setDescription("تحذير عضو")
+    .addUserOption(opt => opt.setName("user").setDescription("العضو المراد تحذيره").setRequired(true))
+    .addStringOption(opt => opt.setName("reason").setDescription("السبب")),
+  async execute(interaction, args) {
+    const isMsg = interaction instanceof Message;
+    const member = interaction.member as GuildMember;
+    const moderator = isMsg ? interaction.author : interaction.user;
 
-    if (!message.member?.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-      await message.reply("❌ ليس لديك صلاحية لتحذير الأعضاء");
+    if (!member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      const msg = "❌ ليس لديك صلاحية تحذير الأعضاء";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
       return;
     }
 
-    const targetUser = message.mentions.users.first();
+    const targetUser = isMsg ? interaction.mentions.users.first() : interaction.options.getUser("user");
+    const reason = isMsg ? args.slice(1).join(" ") : interaction.options.getString("reason") || "لم يتم تحديد سبب";
+
     if (!targetUser) {
-      await message.reply("❌ يجب أن تحدد عضو لتحذيره");
+      if (isMsg) await interaction.reply("❌ يجب أن تحدد عضو لتحذيره");
       return;
     }
-
-    const reason = args.slice(1).join(" ") || "لم يتم تحديد سبب";
 
     try {
       const db = await getDb();
-      if (db) {
+      if (db && interaction.guildId) {
         await db.insert(moderationLogs).values({
-          serverId: message.guildId!,
+          serverId: interaction.guildId,
           targetUserId: targetUser.id,
-          moderatorId: message.author.id,
+          moderatorId: moderator.id,
           action: "warn",
           reason,
         });
       }
 
-      const embed = createModerationEmbed("تحذير", targetUser.username, reason);
-      await message.reply({ embeds: [embed] });
+      const embed = createModerationEmbed("تحذير", targetUser.tag, moderator.tag, reason, "#ffff00");
+      isMsg ? await interaction.reply({ embeds: [embed] }) : await interaction.reply({ embeds: [embed] });
     } catch (error) {
       console.error("Warn error:", error);
-      await message.reply("❌ حدث خطأ أثناء محاولة تحذير العضو");
+      const msg = "❌ حدث خطأ أثناء محاولة تحذير العضو";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
     }
   },
 };
 
 export const muteCommand: Command = {
   name: "mute",
-  description: "كتم صوت عضو",
-  adminOnly: true,
-  async execute(message, args) {
-    if (!(message instanceof Message)) return;
+  description: "كتم صوت عضو (Timeout)",
+  slashBuilder: new SlashCommandBuilder()
+    .setName("mute")
+    .setDescription("كتم صوت عضو (Timeout)")
+    .addUserOption(opt => opt.setName("user").setDescription("العضو المراد كتمه").setRequired(true))
+    .addIntegerOption(opt => opt.setName("duration").setDescription("المدة بالدقائق").setRequired(true))
+    .addStringOption(opt => opt.setName("reason").setDescription("السبب")),
+  async execute(interaction, args) {
+    const isMsg = interaction instanceof Message;
+    const guild = interaction.guild;
+    const member = interaction.member as GuildMember;
+    const moderator = isMsg ? interaction.author : interaction.user;
 
-    if (!message.member?.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-      await message.reply("❌ ليس لديك صلاحية لكتم صوت الأعضاء");
+    if (!member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      const msg = "❌ ليس لديك صلاحية كتم الأعضاء";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
       return;
     }
 
-    const targetUser = message.mentions.users.first();
+    const targetUser = isMsg ? interaction.mentions.users.first() : interaction.options.getUser("user");
+    const duration = isMsg ? parseInt(args[1]) || 60 : interaction.options.getInteger("duration") || 60;
+    const reason = isMsg ? args.slice(2).join(" ") : interaction.options.getString("reason") || "لم يتم تحديد سبب";
+
     if (!targetUser) {
-      await message.reply("❌ يجب أن تحدد عضو لكتم صوته");
+      if (isMsg) await interaction.reply("❌ يجب أن تحدد عضو لكتمه");
       return;
     }
-
-    const reason = args.slice(1).join(" ") || "لم يتم تحديد سبب";
 
     try {
-      const member = await message.guild?.members.fetch(targetUser.id);
-      if (!member) {
-        await message.reply("❌ لم أتمكن من العثور على العضو");
+      const targetMember = await guild?.members.fetch(targetUser.id);
+      if (!targetMember || !targetMember.moderatable) {
+        const msg = "❌ لا يمكنني كتم هذا العضو";
+        isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
         return;
       }
 
-      const muteTime = 60 * 60 * 1000; // ساعة واحدة
-      await member.timeout(muteTime, reason);
+      await targetMember.timeout(duration * 60 * 1000, reason);
 
-      const embed = createModerationEmbed("كتم صوت", targetUser.username, reason);
-      await message.reply({ embeds: [embed] });
+      const embed = createModerationEmbed("كتم (Timeout)", targetUser.tag, moderator.tag, `المدة: ${duration} دقيقة\nالسبب: ${reason}`, "#ff8800");
+      isMsg ? await interaction.reply({ embeds: [embed] }) : await interaction.reply({ embeds: [embed] });
     } catch (error) {
       console.error("Mute error:", error);
-      await message.reply("❌ حدث خطأ أثناء محاولة كتم صوت العضو");
+      const msg = "❌ حدث خطأ أثناء محاولة كتم العضو";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
     }
   },
 };
 
 export const unmuteCommand: Command = {
   name: "unmute",
-  description: "فتح صوت عضو",
-  adminOnly: true,
-  async execute(message) {
-    if (!(message instanceof Message)) return;
+  description: "إلغاء كتم عضو",
+  slashBuilder: new SlashCommandBuilder()
+    .setName("unmute")
+    .setDescription("إلغاء كتم عضو")
+    .addUserOption(opt => opt.setName("user").setDescription("العضو المراد إلغاء كتمه").setRequired(true)),
+  async execute(interaction) {
+    const isMsg = interaction instanceof Message;
+    const guild = interaction.guild;
+    const member = interaction.member as GuildMember;
 
-    if (!message.member?.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-      await message.reply("❌ ليس لديك صلاحية لفتح صوت الأعضاء");
+    if (!member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      const msg = "❌ ليس لديك صلاحية إلغاء كتم الأعضاء";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
       return;
     }
 
-    const targetUser = message.mentions.users.first();
+    const targetUser = isMsg ? interaction.mentions.users.first() : interaction.options.getUser("user");
     if (!targetUser) {
-      await message.reply("❌ يجب أن تحدد عضو لفتح صوته");
+      if (isMsg) await interaction.reply("❌ يجب أن تحدد عضو لإلغاء كتمه");
       return;
     }
 
     try {
-      const member = await message.guild?.members.fetch(targetUser.id);
-      if (!member) {
-        await message.reply("❌ لم أتمكن من العثور على العضو");
+      const targetMember = await guild?.members.fetch(targetUser.id);
+      if (!targetMember) {
+        const msg = "❌ لم يتم العثور على العضو";
+        isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
         return;
       }
 
-      await member.timeout(null);
-
-      const embed = new EmbedBuilder()
-        .setColor("#00ff00")
-        .setTitle("✅ فتح الصوت")
-        .addFields({ name: "المستخدم", value: targetUser.username })
-        .setTimestamp();
-
-      await message.reply({ embeds: [embed] });
+      await targetMember.timeout(null);
+      const successMsg = `✅ تم إلغاء كتم ${targetUser.tag} بنجاح`;
+      isMsg ? await interaction.reply(successMsg) : await interaction.reply(successMsg);
     } catch (error) {
       console.error("Unmute error:", error);
-      await message.reply("❌ حدث خطأ أثناء محاولة فتح صوت العضو");
+      const msg = "❌ حدث خطأ أثناء محاولة إلغاء كتم العضو";
+      isMsg ? await interaction.reply(msg) : await interaction.reply({ content: msg, ephemeral: true });
     }
   },
 };

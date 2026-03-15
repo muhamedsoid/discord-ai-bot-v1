@@ -67,7 +67,6 @@ async function startServer() {
         token: process.env.DISCORD_TOKEN || "",
         clientId: process.env.VITE_APP_ID || "",
         prefix: "!",
-        geminiApiKey: process.env.GEMINI_API_KEY || "",
       });
       console.log("🤖 Discord Bot started successfully");
     } catch (error) {

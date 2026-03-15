@@ -2,8 +2,8 @@ import { Message, ChatInputCommandInteraction, Interaction, REST, Routes } from 
 import { BotClient } from "./client";
 import { pingCommand } from "./commands/ping";
 import { helpCommand } from "./commands/help";
-import { kickCommand, banCommand, warnCommand, muteCommand, unmuteCommand } from "./commands/moderation";
-import { aiCommand } from "./commands/ai";
+import { kickCommand, banCommand, warnCommand, muteCommand, unmuteCommand, clearCommand } from "./commands/moderation";
+import { userinfoCommand, serverinfoCommand, avatarCommand } from "./commands/utility";
 import { getDb } from "../db";
 import { commandLogs } from "../../drizzle/schema";
 
@@ -15,7 +15,10 @@ export const commands = [
   warnCommand,
   muteCommand,
   unmuteCommand,
-  aiCommand,
+  clearCommand,
+  userinfoCommand,
+  serverinfoCommand,
+  avatarCommand,
 ];
 
 export async function registerSlashCommands(token: string, clientId: string) {

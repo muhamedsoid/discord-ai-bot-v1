@@ -9,10 +9,9 @@ export class BotClient extends Client {
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        // GatewayIntentBits.DirectMessages,
-        // GatewayIntentBits.MessageContent,
-        // GatewayIntentBits.GuildMembers,
-        // GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.MessageContent,
       ],
     });
   }

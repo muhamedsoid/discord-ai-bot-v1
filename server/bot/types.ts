@@ -14,5 +14,4 @@ export interface BotConfig {
   token: string;
   clientId: string;
   prefix: string;
-  geminiApiKey: string;
 }

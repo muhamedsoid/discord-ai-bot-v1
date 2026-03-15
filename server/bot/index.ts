@@ -1,17 +1,9 @@
 import { BotClient } from "./client";
 import { setupEventHandlers } from "./eventHandler";
-import { initializeGemini } from "./services/geminiService";
 import type { BotConfig } from "./types";
 
 export async function startBot(config: BotConfig): Promise<BotClient> {
   const client = new BotClient();
-
-  // تهيئة Gemini AI
-  try {
-    initializeGemini(config.geminiApiKey);
-  } catch (error) {
-    console.warn("⚠️ Failed to initialize Gemini:", error);
-  }
 
   // إعداد معالجات الأحداث
   setupEventHandlers(client);
