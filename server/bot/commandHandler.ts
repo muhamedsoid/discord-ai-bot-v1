@@ -4,6 +4,7 @@ import { pingCommand } from "./commands/ping";
 import { helpCommand } from "./commands/help";
 import { kickCommand, banCommand, warnCommand, muteCommand, unmuteCommand, clearCommand } from "./commands/moderation";
 import { userinfoCommand, serverinfoCommand, avatarCommand } from "./commands/utility";
+import { roleCommand } from "./commands/role";
 import { getDb } from "../db";
 import { commandLogs } from "../../drizzle/schema";
 
@@ -19,6 +20,7 @@ export const commands = [
   userinfoCommand,
   serverinfoCommand,
   avatarCommand,
+  roleCommand,
 ];
 
 export async function registerSlashCommands(token: string, clientId: string) {
