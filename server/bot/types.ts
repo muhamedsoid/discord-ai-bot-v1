@@ -1,4 +1,4 @@
-import type { Message, CommandInteraction } from "discord.js";
+import type { Message, CommandInteraction, SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 
 export interface Command {
   name: string;
@@ -6,7 +6,8 @@ export interface Command {
   usage?: string;
   aliases?: string[];
   adminOnly?: boolean;
-  execute: (message: Message | CommandInteraction, args: string[]) => Promise<void>;
+  slashBuilder?: SlashCommandBuilder | any;
+  execute: (message: Message | ChatInputCommandInteraction, args: string[]) => Promise<void>;
 }
 
 export interface BotConfig {

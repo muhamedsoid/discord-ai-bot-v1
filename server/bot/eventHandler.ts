@@ -1,13 +1,22 @@
-import { Message, Guild } from "discord.js";
+import { Message, Guild, Interaction } from "discord.js";
 import { BotClient } from "./client";
-import { handleCommand } from "./commandHandler";
+import { handleCommand, handleInteraction, registerSlashCommands } from "./commandHandler";
 import { getDb } from "../db";
 import { discordServers } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
 export function setupEventHandlers(client: BotClient): void {
-  client.on("ready", () => {
+  client.on("ready", async () => {
     console.log(`✅ Bot is ready! Logged in as ${client.user?.tag}`);
+    
+    // Register slash commands
+    if (client.user) {
+      await registerSlashCommands(process.env.DISCORD_TOKEN!, client.user.id);
+    }
+  });
+
+  client.on("interactionCreate", async (interaction: Interaction) => {
+    await handleInteraction(client, interaction);
   });
 
   client.on("guildCreate", async (guild: Guild) => {
