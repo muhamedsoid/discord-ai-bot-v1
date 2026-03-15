@@ -12,72 +12,42 @@ export async function askGemini(question: string, conversationHistory: Array<{ r
     throw new Error("Gemini AI not initialized. Call initializeGemini first.");
   }
 
-  try {
-    const model = geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
+  // Try different model names in case of 404
+  const modelsToTry = ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+  let lastError: any = null;
 
-    // بناء السياق من السجل
-    const messages = [
-      ...conversationHistory.map((msg) => ({
-        role: msg.role as "user" | "model",
-        parts: [{ text: msg.content }],
-      })),
-      {
-        role: "user" as const,
-        parts: [{ text: question }],
-      },
-    ];
+  for (const modelName of modelsToTry) {
+    try {
+      console.log(`🤖 Attempting to use model: ${modelName}`);
+      const model = geminiClient.getGenerativeModel({ model: modelName });
 
-    const chat = model.startChat({
-      history: conversationHistory.length > 0 ? messages.slice(0, -1) : [],
-    });
+      const chat = model.startChat({
+        history: conversationHistory.map((msg) => ({
+          role: msg.role === "user" ? "user" : "model",
+          parts: [{ text: msg.content }],
+        })),
+      });
 
-    const result = await chat.sendMessage(question);
-    const response = result.response;
-    const text = response.text();
-
-    return text;
-  } catch (error) {
-    console.error("Gemini API error:", error);
-    throw new Error(`Failed to get response from Gemini: ${error instanceof Error ? error.message : "Unknown error"}`);
+      const result = await chat.sendMessage(question);
+      const response = result.response;
+      return response.text();
+    } catch (error: any) {
+      console.error(`❌ Failed with model ${modelName}:`, error.message);
+      lastError = error;
+      // If it's not a 404, it might be an API key issue, so we don't need to try other models
+      if (!error.message.includes("404") && !error.message.includes("not found")) {
+        break;
+      }
+    }
   }
+
+  throw new Error(`Failed to get response from Gemini after trying multiple models: ${lastError?.message || "Unknown error"}`);
 }
 
 export async function summarizeText(text: string): Promise<string> {
-  if (!geminiClient) {
-    throw new Error("Gemini AI not initialized");
-  }
-
-  try {
-    const model = geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-    const result = await model.generateContent(
-      `Please summarize the following text in Arabic:\n\n${text}`
-    );
-
-    const response = result.response;
-    return response.text();
-  } catch (error) {
-    console.error("Gemini summarize error:", error);
-    throw new Error("Failed to summarize text");
-  }
+  return askGemini(`Please summarize the following text in Arabic:\n\n${text}`);
 }
 
 export async function translateText(text: string, targetLanguage: string): Promise<string> {
-  if (!geminiClient) {
-    throw new Error("Gemini AI not initialized");
-  }
-
-  try {
-    const model = geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-    const result = await model.generateContent(
-      `Translate the following text to ${targetLanguage}:\n\n${text}`
-    );
-
-    const response = result.response;
-    return response.text();
-  } catch (error) {
-    console.error("Gemini translate error:", error);
-    throw new Error("Failed to translate text");
-  }
+  return askGemini(`Translate the following text to ${targetLanguage}:\n\n${text}`);
 }
