@@ -1,0 +1,14 @@
+run = "pnpm install && pnpm build && node dist/index.js"
+entrypoint = "server/_core/index.ts"
+
+[env]
+DISCORD_TOKEN = ""
+GEMINI_API_KEY = ""
+NODE_ENV = "production"
+
+[nix]
+channel = "stable-22_11"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
